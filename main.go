@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -127,32 +128,37 @@ func getStats(c *gin.Context) {
 		return
 	}
 
-	if len(device.stats) == 0 {
-		c.Status(http.StatusNoContent)
-		return
-	}
-
-	var totalUpload int
-	for _, s := range device.stats {
-		totalUpload += s.UploadTime
-	}
-	avgNs := totalUpload / len(device.stats)
-	avgDuration := time.Duration(avgNs)
-
-	var uptimePct float64
-	if len(device.heartbeats) > 0 {
+	var uptime float64
+	// Calculate uptime from heartbeats
+	if len(device.heartbeats) != 0 {
 		first := device.heartbeats[0].SentAt
 		last := device.heartbeats[len(device.heartbeats)-1].SentAt
-		expected := last.Sub(first).Hours()
-		if expected > 0 {
-			uptimePct = (float64(len(device.heartbeats)) / expected) * 100
-		} else {
-			uptimePct = 100
-		}
+		elapsed := last.Sub(first).Minutes()
+		heartbeatCount := len(device.heartbeats)
+		uptime = float64(heartbeatCount) / elapsed * 100
+	} else {
+		uptime = 0.0
 	}
 
+	// Calculate average upload time
+	var avgUploadTime float64
+	if len(device.stats) != 0 {
+		var totalUploadTime int
+		for _, stat := range device.stats {
+			totalUploadTime += stat.UploadTime
+		}
+		avgUploadTime = float64(totalUploadTime) / float64(len(device.stats))
+	} else {
+		avgUploadTime = 0.0
+	}
+
+	// It's unclear what unit of measure the upload times are in, so I will simply 
+	// convert the floating point average to a string
+	var avgUploadTimeStr string
+	avgUploadTimeStr = fmt.Sprintf("%.2f", avgUploadTime)
+
 	c.JSON(http.StatusOK, gin.H{
-		"avg_upload_time": avgDuration.String(),
-		"uptime":          uptimePct,
+		"avg_upload_time": avgUploadTimeStr,
+		"uptime":         uptime,
 	})
 }
