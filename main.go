@@ -163,10 +163,10 @@ func getStats(c *gin.Context) {
 		elapsed := last.Sub(first).Minutes()
 		heartbeatCount := len(device.heartbeats)
 		if elapsed > 0 {
-		uptime = float64(heartbeatCount) / elapsed * 100
-	} else {
-		uptime = 0.0
-	}
+			uptime = float64(heartbeatCount) / elapsed * 100
+		} else {
+			uptime = 0.0
+		}
 	} else {
 		uptime = 0.0
 	}
@@ -192,6 +192,6 @@ func getStats(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"avg_upload_time": avgUploadDuration.String(),
-		"uptime":         uptime,
+		"uptime":          uptime,
 	})
 }
