@@ -35,7 +35,7 @@ func main() {
 	r := setupRouter()
 
 	// Start the server on port 6733
-	if err := r.Run(":6733"); err != nil {
+	if err := r.Run("localhost:6733"); err != nil {
 		log.Fatal("Error starting server: ", err)
 	}
 }
