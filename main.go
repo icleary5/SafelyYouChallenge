@@ -16,7 +16,7 @@ type Heartbeat struct {
 
 type Stats struct {
 	SentAt     time.Time `json:"sent_at"`
-	UploadTime int `json:"upload_time"` // upload duration in milliseconds
+	UploadTime int       `json:"upload_time"` // upload duration in milliseconds
 }
 
 type Device struct {
@@ -31,14 +31,20 @@ func main() {
 
 	initializeDevices("devices.csv")
 
-	r := gin.Default()
-
-	r.POST("/devices/:device_id/heartbeat", postHeartbeat)
+	r := setupRouter()
 
 	// Start the server on port 6733
 	if err := r.Run(":6733"); err != nil {
 		log.Fatal("Error starting server: ", err)
 	}
+}
+
+func setupRouter() *gin.Engine {
+	r := gin.Default()
+	r.POST("/devices/:device_id/heartbeat", postHeartbeat)
+	r.POST("/devices/:device_id/stats", postStats)
+	r.GET("/devices/:device_id/stats", getStats)
+	return r
 }
 
 func initializeDevices(filePath string) {
@@ -92,4 +98,61 @@ func postHeartbeat(c *gin.Context) {
 
 	heartbeats := append(device.heartbeats, heartbeat)
 	device.heartbeats = heartbeats
+	c.Status(http.StatusNoContent)
+}
+
+func postStats(c *gin.Context) {
+	deviceID := c.Param("device_id")
+	device := retrieveDevice(deviceID)
+	if device == nil {
+		c.JSON(http.StatusNotFound, gin.H{"msg": "Device not found"})
+		return
+	}
+
+	var s Stats
+	if err := c.BindJSON(&s); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"msg": "Invalid request body"})
+		return
+	}
+
+	device.stats = append(device.stats, s)
+	c.Status(http.StatusNoContent)
+}
+
+func getStats(c *gin.Context) {
+	deviceID := c.Param("device_id")
+	device := retrieveDevice(deviceID)
+	if device == nil {
+		c.JSON(http.StatusNotFound, gin.H{"msg": "Device not found"})
+		return
+	}
+
+	if len(device.stats) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+
+	var totalUpload int
+	for _, s := range device.stats {
+		totalUpload += s.UploadTime
+	}
+	avgNs := totalUpload / len(device.stats)
+	avgDuration := time.Duration(avgNs)
+
+	var uptimePct float64
+	if len(device.heartbeats) > 0 {
+		first := device.heartbeats[0].SentAt
+		last := device.heartbeats[len(device.heartbeats)-1].SentAt
+		expected := last.Sub(first).Hours()
+		if expected > 0 {
+			uptimePct = (float64(len(device.heartbeats)) / expected) * 100
+		} else {
+			uptimePct = 100
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"avg_upload_time": avgDuration.String(),
+		"uptime":          uptimePct,
+	})
 }
