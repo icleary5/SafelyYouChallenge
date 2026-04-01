@@ -162,7 +162,11 @@ func getStats(c *gin.Context) {
 		last := device.heartbeats[len(device.heartbeats)-1].SentAt
 		elapsed := last.Sub(first).Minutes()
 		heartbeatCount := len(device.heartbeats)
+		if elapsed > 0 {
 		uptime = float64(heartbeatCount) / elapsed * 100
+	} else {
+		uptime = 0.0
+	}
 	} else {
 		uptime = 0.0
 	}
