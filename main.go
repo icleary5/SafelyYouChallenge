@@ -150,6 +150,11 @@ func getStats(c *gin.Context) {
 		return
 	}
 
+	if len(device.heartbeats) == 0 && len(device.stats) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+
 	var uptime float64
 	// Calculate uptime from heartbeats
 	if len(device.heartbeats) != 0 {
