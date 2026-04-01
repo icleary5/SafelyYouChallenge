@@ -42,9 +42,9 @@ func main() {
 
 func setupRouter() *gin.Engine {
 	r := gin.Default()
-	r.POST("/devices/:device_id/heartbeat", postHeartbeat)
-	r.POST("/devices/:device_id/stats", postStats)
-	r.GET("/devices/:device_id/stats", getStats)
+	r.POST("api/v1/devices/:device_id/heartbeat", postHeartbeat)
+	r.POST("api/v1/devices/:device_id/stats", postStats)
+	r.GET("api/v1/devices/:device_id/stats", getStats)
 	return r
 }
 
