@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/csv"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -152,13 +151,15 @@ func getStats(c *gin.Context) {
 		avgUploadTime = 0.0
 	}
 
-	// It's unclear what unit of measure the upload times are in, so I will simply 
-	// convert the floating point average to a string
-	var avgUploadTimeStr string
-	avgUploadTimeStr = fmt.Sprintf("%.2f", avgUploadTime)
+	var avgUploadDuration time.Duration
+	if avgUploadTime != 0 {
+		avgUploadDuration = time.Duration(avgUploadTime) * time.Nanosecond
+	} else {
+		avgUploadDuration = 0
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"avg_upload_time": avgUploadTimeStr,
+		"avg_upload_time": avgUploadDuration.String(),
 		"uptime":         uptime,
 	})
 }
