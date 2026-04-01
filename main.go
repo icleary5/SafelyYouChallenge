@@ -16,7 +16,16 @@ type Heartbeat struct {
 
 type Stats struct {
 	SentAt     time.Time `json:"sent_at"`
-	UploadTime int       `json:"upload_time"` // upload duration in milliseconds
+	UploadTime int       `json:"upload_time"` // upload duration in nanoseconds
+}
+
+type HeartbeatRequest struct {
+	SentAt *time.Time `json:"sent_at"`
+}
+
+type StatsRequest struct {
+	SentAt     *time.Time `json:"sent_at"`
+	UploadTime *int       `json:"upload_time"`
 }
 
 type Device struct {
@@ -86,15 +95,22 @@ func postHeartbeat(c *gin.Context) {
 	deviceID := c.Param("device_id")
 	device := retrieveDevice(deviceID)
 	if device == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Device not found"})
+		c.JSON(http.StatusNotFound, gin.H{"msg": "Device not found"})
 		return
 	}
 
-	var heartbeat Heartbeat
-	if err := c.BindJSON(&heartbeat); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+	var req HeartbeatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
 		return
 	}
+
+	if req.SentAt == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
+		return
+	}
+
+	heartbeat := Heartbeat{SentAt: *req.SentAt}
 
 	heartbeats := append(device.heartbeats, heartbeat)
 	device.heartbeats = heartbeats
@@ -109,11 +125,18 @@ func postStats(c *gin.Context) {
 		return
 	}
 
-	var s Stats
-	if err := c.BindJSON(&s); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"msg": "Invalid request body"})
+	var req StatsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
 		return
 	}
+
+	if req.SentAt == nil || req.UploadTime == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
+		return
+	}
+
+	s := Stats{SentAt: *req.SentAt, UploadTime: *req.UploadTime}
 
 	device.stats = append(device.stats, s)
 	c.Status(http.StatusNoContent)
