@@ -26,7 +26,7 @@ func TestPostDeviceHeartbeat(t *testing.T) {
 	router := setupRouter()
 
 	body := `{"sent_at":"2026-03-31T12:00:00Z"}`
-	req := httptest.NewRequest(http.MethodPost, "/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -42,7 +42,7 @@ func TestPostDeviceStats(t *testing.T) {
 	router := setupRouter()
 
 	body := `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`
-	req := httptest.NewRequest(http.MethodPost, "/devices/60-6b-44-84-dc-64/stats", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -59,11 +59,11 @@ func TestGetDeviceStats(t *testing.T) {
 
 	// Seed one stats entry so the GET returns 200 rather than 204
 	statsBody := `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`
-	postReq := httptest.NewRequest(http.MethodPost, "/devices/60-6b-44-84-dc-64/stats", strings.NewReader(statsBody))
+	postReq := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", strings.NewReader(statsBody))
 	postReq.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(httptest.NewRecorder(), postReq)
 
-	req := httptest.NewRequest(http.MethodGet, "/devices/60-6b-44-84-dc-64/stats", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/60-6b-44-84-dc-64/stats", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
