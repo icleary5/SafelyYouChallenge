@@ -74,6 +74,20 @@ Average upload time is the mean of all recorded upload duration values (in milli
 
 ---
 
+## Database Architecture
+
+The current implementation stores all device data in memory using a package-level slice, where each device contains its own collections of heartbeats and statistics. This works well for prototyping and local testing, but it does not provide persistence and cannot scale beyond a single process. To prepare for production use, the codebase already introduces a separate database layer as its own package. This separation of concerns allows the storage implementation to evolve independently from the API logic, making it possible to replace the in-memory approach without disrupting the rest of the system.
+
+For a production system, the primary decision is between a relational database and a NoSQL database. Given the nature of this application, a NoSQL solution - specifically a key-value store such as AWS DynamoDB - is the better fit. The reason is that the system has a very well-defined and consistent access pattern: all reads and writes are performed using a device ID. There are no complex joins or relationships between entities that would justify the overhead of a relational model. In practice, even a relational database would rely heavily on indexing by device ID to achieve acceptable performance, meaning most operations would effectively be index lookups anyway. A NoSQL database models this pattern directly, eliminating unnecessary abstraction layers and improving performance.
+
+Using a key-value store allows the system to scale horizontally without requiring complex sharding strategies. Each device’s data can be accessed directly via its key, making both reads and writes efficient and predictable. A typical data model would use the device ID as the partition key, with each heartbeat and statistics data point stored as separate records keyed by device (partition key) and timestamp (sort key). This structure supports high-throughput ingestion of telemetry data while still enabling efficient retrieval of per-device metrics.
+
+There may be cases where broader analytical queries are needed, such as aggregating data across many devices. These operations are not expected to be latency-sensitive and can be handled separately from the core API workload. If they become important, the data model can be extended with additional access patterns tailored to those queries. In practice, this kind of flexibility is another advantage of a NoSQL approach: it allows the system to evolve based on observed usage rather than requiring a fully normalized schema upfront.
+
+Finally, the flexibility of a NoSQL database makes it easier to accommodate future changes. As new types of metrics or telemetry are introduced, they can be added without requiring disruptive schema migrations. Overall, a DynamoDB-style architecture aligns well with the system’s access patterns, scalability needs, and anticipated evolution.
+
+---
+
 ## Security Posture
 
 This section outlines a forward-looking security strategy for the API, designed to scale with the system as it begins handling more sensitive and valuable data. While the current implementation may not be a high-value target, the architecture anticipates future risk and proactively establishes strong security foundations.
