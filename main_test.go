@@ -151,6 +151,22 @@ func TestPostHeartbeatMissingSentAtReturnsInternalServerError(t *testing.T) {
 	}
 }
 
+func TestPostHeartbeatUnsupportedMediaTypeReturnsInternalServerError(t *testing.T) {
+	resetDevices()
+	router := setupRouter()
+
+	body := `{"sent_at":"2026-03-31T12:00:00Z"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(body))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
+	}
+}
+
 func TestPostHeartbeatMalformedJSONReturnsInternalServerError(t *testing.T) {
 	resetDevices()
 	router := setupRouter()
@@ -188,5 +204,21 @@ func TestPostHeartbeatUnknownDeviceReturnsNotFoundWithMsg(t *testing.T) {
 	}
 	if resp["msg"] == "" {
 		t.Error("expected msg to be present in response")
+	}
+}
+
+func TestPostStatsUnsupportedMediaTypeReturnsInternalServerError(t *testing.T) {
+	resetDevices()
+	router := setupRouter()
+
+	body := `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", strings.NewReader(body))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
 	}
 }

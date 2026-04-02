@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"time"
@@ -91,6 +92,20 @@ func retrieveDevice(deviceID string) *Device {
 	return device
 }
 
+func isJSONContentType(c *gin.Context) bool {
+	contentType := c.GetHeader("Content-Type")
+	if contentType == "" {
+		return false
+	}
+
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+
+	return mediaType == "application/json"
+}
+
 // Handler for the /heartbeat endpoint
 func postHeartbeat(c *gin.Context) {
 
@@ -109,6 +124,11 @@ func postHeartbeat(c *gin.Context) {
 
 	if len(bytes.TrimSpace(raw)) == 0 {
 		c.Status(http.StatusNoContent)
+		return
+	}
+
+	if !isJSONContentType(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
 		return
 	}
 
@@ -146,6 +166,11 @@ func postStats(c *gin.Context) {
 
 	if len(bytes.TrimSpace(raw)) == 0 {
 		c.Status(http.StatusNoContent)
+		return
+	}
+
+	if !isJSONContentType(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
 		return
 	}
 
