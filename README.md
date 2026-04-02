@@ -96,6 +96,17 @@ On the computation side, the system already tracks the average upload time using
 
 The API design allows for extra metrics to be sent in `POST /api/v1/devices/{device_id}/stats`. Therefore new metrics data can be added to the API specification in a backwards-compatible way. In effect, both the storage model and API contract can be designed to evolve organically as new metric types are introduced. 
 
+---
+
+## Complexity Analysis
+
+The implementation focuses on keeping both uptime and upload duration calculations efficient, using approaches that maintain **constant time and constant memory complexity** .
+
+For uptime, the calculation is intentionally minimal: it stores only the **first and most recent heartbeat timestamps**, along with a **count of heartbeats received**. This avoids retaining the full history of events while still allowing accurate uptime metrics to be derived.
+
+For average upload duration, the system uses the **incremental mean algorithm** to maintain a running average. Instead of storing all observed durations, it keeps only the **current mean and the count of samples**, updating the average as new data arrives. This achieves the same goal - accurate averaging - without the overhead of accumulating historical data.
+
+To support auditability and potential error recovery, the system also includes a streaming mechanism. Incoming device data is **forwarded to an external service interface**, though in the current demonstration setup, that data is simply discarded. This design decouples ingestion from storage, ensuring the server remains **highly responsive and protected from overload**, while leaving room to integrate persistent logging or downstream processing in a production environment.
 
 ---
 
