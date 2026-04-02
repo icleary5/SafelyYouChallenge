@@ -42,6 +42,123 @@ A device is considered offline if no heartbeat is received during a minute inter
 ### Average Upload Time
 Average upload time is the mean of all recorded upload duration values (in milliseconds).
 
+---
+
+## Security Posture
+
+This section outlines a forward-looking security strategy for the API, designed to scale with the system as it begins handling more sensitive and valuable data. While the current implementation may not be a high-value target, the architecture anticipates future risk and proactively establishes strong security foundations.
+
+### 1. Transport Security (TLS)
+
+All communication between client devices and the API must be secured using TLS. This ensures:
+
+* Confidentiality of transmitted data
+* Protection against man-in-the-middle (MITM) attacks
+* Integrity of request and response payloads
+
+### 2. Device Authentication via Symmetric Cryptography
+
+Because both the client devices and server are controlled within the same system, a symmetric key model is used:
+
+* Each device is provisioned with a unique symmetric key (e.g., AES key).
+* The server stores all device keys securely (e.g., in AWS KMS).
+* Every request from a device is **cryptographically signed** using its key.
+* The server verifies the signature before processing the request.
+
+This ensures:
+
+* Strong authentication of device identity
+* Protection against spoofed or tampered requests
+
+### 3. Server Authentication (Mutual Trust)
+
+To ensure trust in both directions:
+
+* The server signs responses using the same symmetric key associated with the device.
+* Devices verify the server’s signature before accepting responses.
+
+This prevents:
+
+* Malicious or spoofed server responses
+* Unauthorized intermediaries injecting data
+
+### 4. Information Leakage Mitigation
+
+Device identifiers are included in request paths and may be sensitive. Although TLS encrypts transport, additional precautions are taken:
+
+* Unauthorized requests must return responses indistinguishable from valid “not found” responses (e.g., HTTP 404).
+* Avoid revealing whether a device ID exists via status codes or error messages.
+
+This prevents:
+
+* Enumeration attacks
+* Side-channel leakage of valid device IDs
+
+### 5. Secure Key Storage (AWS KMS)
+
+All cryptographic keys are stored in a secure key management system such as AWS KMS:
+
+* Centralized key storage
+* Strict access controls
+* Auditability and rotation support
+
+### 6. Automated Key Rotation
+
+To reduce long-term key exposure:
+
+* KMS-managed key rotation is enabled.
+* A Lambda function responds to rotation events and initiates key updates on devices.
+* A **Diffie-Hellman key exchange** is used to securely negotiate new symmetric keys with devices.
+
+Important considerations:
+
+* Use a well-established, vetted cryptographic library for Diffie-Hellman.
+* Avoid implementing custom cryptographic algorithms.
+
+### 7. Asymmetric Key Infrastructure for Key Exchange
+
+* The server fleet shares an asymmetric private key used during Diffie-Hellman exchanges.
+* This private key is securely stored in KMS.
+* All servers use this shared key to participate in secure key negotiation with devices.
+
+### 8. Performance Considerations (Key Caching)
+
+To control operational costs and latency:
+
+* Servers cache decrypted key material in memory.
+* This avoids excessive calls to KMS.
+
+Security implications:
+
+* In-memory caching is acceptable because compromise of server memory implies full system compromise.
+* At that point, access to keys is not the primary concern.
+
+### 9. Threat Model Summary
+
+This security posture protects against:
+
+* Unauthorized device impersonation
+* Request/response tampering
+* Device ID enumeration
+* Long-term key compromise
+
+It assumes:
+
+* Server compromise is catastrophic and out of scope for mitigation at this layer
+* Cryptographic primitives are implemented using trusted libraries
+
+### 10. High-Level Summary
+
+The system security model is built on three core principles:
+
+1. **Secure transport via TLS**
+2. **Mutual authentication using symmetric cryptographic signatures**
+3. **Automated, secure key rotation using KMS and Diffie-Hellman key exchange**
+
+This approach provides a strong, scalable foundation for securing communication between distributed devices and the API as the system evolves. 
+
+---
+
 ## Summary
 
 **Time Spent**: Approximately 11.5 hours for learning GoLang, studying the problem, and implementing a solution.
