@@ -148,7 +148,7 @@ Overall, I used A.I. as a productivity and learning multiplier—not as a substi
 
 ## Summary
 
-**Time Spent**: Approximately 11.5 hours for learning GoLang, studying the problem, and implementing a solution.
+**Time Spent**: Approximately 17.5 hours for learning GoLang, studying the problem, implementing a solution, and iterating to production-level code.
 
 **Most Difficult Part**: This project went pretty smoothly. I didn't find any part of it frustrating. Most of the time was spent learning GoLang. Because I've been using Python for so long, it was challenging to keep concurrency in mind.
 
