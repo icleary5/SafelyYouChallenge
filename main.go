@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/icleary5/SafelyYouChallenge/metrics"
 	"github.com/icleary5/SafelyYouChallenge/model"
 )
 
@@ -155,40 +156,8 @@ func getStats(c *gin.Context) {
 		return
 	}
 
-	var uptime float64
-	// Calculate uptime from heartbeats
-	if len(heartbeats) != 0 {
-		first := heartbeats[0].SentAt
-		last := heartbeats[len(heartbeats)-1].SentAt
-		elapsed := last.Sub(first).Minutes()
-		heartbeatCount := len(heartbeats)
-		if elapsed > 0 {
-			uptime = float64(heartbeatCount) / elapsed * 100
-		} else {
-			uptime = 0.0
-		}
-	} else {
-		uptime = 0.0
-	}
-
-	// Calculate average upload time
-	var avgUploadTime float64
-	if len(stats) != 0 {
-		var totalUploadTime int
-		for _, stat := range stats {
-			totalUploadTime += stat.UploadTime
-		}
-		avgUploadTime = float64(totalUploadTime) / float64(len(stats))
-	} else {
-		avgUploadTime = 0.0
-	}
-
-	var avgUploadDuration time.Duration
-	if avgUploadTime != 0 {
-		avgUploadDuration = time.Duration(avgUploadTime) * time.Nanosecond
-	} else {
-		avgUploadDuration = 0
-	}
+	uptime := metrics.Uptime(heartbeats)
+	avgUploadDuration := metrics.AverageUploadDuration(stats)
 
 	c.JSON(http.StatusOK, gin.H{
 		"avg_upload_time": avgUploadDuration.String(),
