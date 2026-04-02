@@ -21,6 +21,9 @@ type Device struct {
 	mu         sync.RWMutex
 	heartbeats []Heartbeat
 	stats      []Stats
+	firstHeartbeatAt time.Time
+	lastHeartbeatAt  time.Time
+	heartbeatCount   int64
 	uploadTimeMean  float64
 	uploadTimeCount int64
 }
@@ -77,6 +80,12 @@ func (d *Device) AddHeartbeat(hb Heartbeat) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.heartbeats = append(d.heartbeats, hb)
+
+	d.heartbeatCount++
+	if d.heartbeatCount == 1 {
+		d.firstHeartbeatAt = hb.SentAt
+	}
+	d.lastHeartbeatAt = hb.SentAt
 }
 
 func (d *Device) AddStats(s Stats) {
@@ -111,6 +120,12 @@ func (d *Device) StatsCount() int64 {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.uploadTimeCount
+}
+
+func (d *Device) HeartbeatSummary() (time.Time, time.Time, int64) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.firstHeartbeatAt, d.lastHeartbeatAt, d.heartbeatCount
 }
 
 // HeartbeatsAndStats returns a consistent snapshot of both slices under a single lock,

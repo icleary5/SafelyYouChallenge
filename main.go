@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/icleary5/SafelyYouChallenge/metrics"
 	"github.com/icleary5/SafelyYouChallenge/model"
 )
 
@@ -149,15 +148,21 @@ func getStats(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"msg": "Device not found"})
 		return
 	}
-	heartbeats := device.Heartbeats()
+	firstHeartbeatAt, lastHeartbeatAt, heartbeatCount := device.HeartbeatSummary()
 	statsCount := device.StatsCount()
 
-	if len(heartbeats) == 0 && statsCount == 0 {
+	if heartbeatCount == 0 && statsCount == 0 {
 		c.Status(http.StatusNoContent)
 		return
 	}
 
-	uptime := metrics.Uptime(heartbeats)
+	uptime := 0.0
+	if heartbeatCount > 0 {
+		elapsedMinutes := lastHeartbeatAt.Sub(firstHeartbeatAt).Minutes()
+		if elapsedMinutes > 0 {
+			uptime = float64(heartbeatCount) / elapsedMinutes * 100
+		}
+	}
 	avgUploadDuration := time.Duration(device.UploadTimeMean()) * time.Nanosecond
 
 	c.JSON(http.StatusOK, gin.H{

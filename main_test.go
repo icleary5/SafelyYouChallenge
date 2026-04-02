@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -88,6 +89,21 @@ func TestGetDeviceStats(t *testing.T) {
 	resetDevices()
 	router := setupRouter()
 
+	heartbeats := []string{
+		`{"sent_at":"2026-03-31T12:00:00Z"}`,
+		`{"sent_at":"2026-03-31T12:00:30Z"}`,
+		`{"sent_at":"2026-03-31T12:01:00Z"}`,
+	}
+	for _, heartbeatBody := range heartbeats {
+		postHeartbeatReq := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(heartbeatBody))
+		postHeartbeatReq.Header.Set("Content-Type", "application/json")
+		heartbeatW := httptest.NewRecorder()
+		router.ServeHTTP(heartbeatW, postHeartbeatReq)
+		if heartbeatW.Code != http.StatusNoContent {
+			t.Fatalf("expected heartbeat POST 204, got %d", heartbeatW.Code)
+		}
+	}
+
 	// Seed one stats entry so the GET returns 200 rather than 204
 	statsBody := `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`
 	postReq := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", strings.NewReader(statsBody))
@@ -113,7 +129,9 @@ func TestGetDeviceStats(t *testing.T) {
 	if resp.AvgUploadTime != "500ms" {
 		t.Errorf("expected avg_upload_time to be 500ms, got %q", resp.AvgUploadTime)
 	}
-	// uptime is a float64; zero is a valid value so just confirm the field decoded without error.
+	if math.Abs(resp.Uptime-300.0) > 1e-9 {
+		t.Errorf("expected uptime to be 300.0, got %f", resp.Uptime)
+	}
 }
 
 func TestGetDeviceStatsNoDataReturnsNoContent(t *testing.T) {
