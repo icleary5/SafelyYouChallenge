@@ -110,8 +110,8 @@ func TestGetDeviceStats(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response body: %v", err)
 	}
-	if resp.AvgUploadTime == "" {
-		t.Error("expected avg_upload_time to be present in response")
+	if resp.AvgUploadTime != "500ms" {
+		t.Errorf("expected avg_upload_time to be 500ms, got %q", resp.AvgUploadTime)
 	}
 	// uptime is a float64; zero is a valid value so just confirm the field decoded without error.
 }

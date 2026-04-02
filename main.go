@@ -149,15 +149,16 @@ func getStats(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"msg": "Device not found"})
 		return
 	}
-	heartbeats, stats := device.HeartbeatsAndStats()
+	heartbeats := device.Heartbeats()
+	statsCount := device.StatsCount()
 
-	if len(heartbeats) == 0 && len(stats) == 0 {
+	if len(heartbeats) == 0 && statsCount == 0 {
 		c.Status(http.StatusNoContent)
 		return
 	}
 
 	uptime := metrics.Uptime(heartbeats)
-	avgUploadDuration := metrics.AverageUploadDuration(stats)
+	avgUploadDuration := time.Duration(device.UploadTimeMean()) * time.Nanosecond
 
 	c.JSON(http.StatusOK, gin.H{
 		"avg_upload_time": avgUploadDuration.String(),

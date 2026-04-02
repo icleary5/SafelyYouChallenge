@@ -21,6 +21,8 @@ type Device struct {
 	mu         sync.RWMutex
 	heartbeats []Heartbeat
 	stats      []Stats
+	uploadTimeMean  float64
+	uploadTimeCount int64
 }
 
 var (
@@ -81,6 +83,10 @@ func (d *Device) AddStats(s Stats) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.stats = append(d.stats, s)
+
+	d.uploadTimeCount++
+	incoming := float64(s.UploadTime)
+	d.uploadTimeMean = d.uploadTimeMean + (incoming-d.uploadTimeMean)/float64(d.uploadTimeCount)
 }
 
 func (d *Device) Heartbeats() []Heartbeat {
@@ -93,6 +99,18 @@ func (d *Device) Stats() []Stats {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return append([]Stats(nil), d.stats...)
+}
+
+func (d *Device) UploadTimeMean() float64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.uploadTimeMean
+}
+
+func (d *Device) StatsCount() int64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.uploadTimeCount
 }
 
 // HeartbeatsAndStats returns a consistent snapshot of both slices under a single lock,
