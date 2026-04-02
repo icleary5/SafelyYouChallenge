@@ -2,25 +2,15 @@ package main
 
 import (
 	"bytes"
-	"encoding/csv"
 	"encoding/json"
 	"log"
 	"mime"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/icleary5/SafelyYouChallenge/model"
 )
-
-type Heartbeat struct {
-	SentAt time.Time `json:"sent_at"`
-}
-
-type Stats struct {
-	SentAt     time.Time `json:"sent_at"`
-	UploadTime int       `json:"upload_time"` // upload duration in nanoseconds
-}
 
 type HeartbeatRequest struct {
 	SentAt *time.Time `json:"sent_at"`
@@ -31,17 +21,11 @@ type StatsRequest struct {
 	UploadTime *int       `json:"upload_time"`
 }
 
-type Device struct {
-	ID         string
-	heartbeats []Heartbeat
-	stats      []Stats
-}
-
-var devices []Device // In-memory storage for devices, a poorman’s database for this example
-
 func main() {
 
-	initializeDevices("devices.csv")
+	if err := model.InitializeDevices("devices.csv"); err != nil {
+		log.Fatal("Error initializing devices.csv: ", err)
+	}
 
 	r := setupRouter()
 
@@ -59,39 +43,6 @@ func setupRouter() *gin.Engine {
 	r.POST("api/v1/devices/:device_id/stats", postStats)
 	r.GET("api/v1/devices/:device_id/stats", getStats)
 	return r
-}
-
-func initializeDevices(filePath string) {
-
-	f, err := os.Open(filePath)
-	if err != nil {
-		log.Fatal("Error opening devices.csv: ", err)
-	}
-	defer f.Close()
-
-	csvReader := csv.NewReader(f)
-	records, err := csvReader.ReadAll()
-	if err != nil {
-		log.Fatal("Error reading devices.csv: ", err)
-	}
-
-	for _, record := range records {
-		if len(record) < 1 {
-			continue // Skip invalid records
-		}
-		devices = append(devices, Device{ID: record[0]})
-	}
-}
-
-func retrieveDevice(deviceID string) *Device {
-	var device *Device
-	for i := range devices {
-		if devices[i].ID == deviceID {
-			device = &devices[i]
-			break
-		}
-	}
-	return device
 }
 
 func isJSONContentType(c *gin.Context) bool {
@@ -112,7 +63,7 @@ func isJSONContentType(c *gin.Context) bool {
 func postHeartbeat(c *gin.Context) {
 
 	deviceID := c.Param("device_id")
-	device := retrieveDevice(deviceID)
+	device := model.GetDevice(deviceID)
 	if device == nil {
 		c.JSON(http.StatusNotFound, gin.H{"msg": "Device not found"})
 		return
@@ -145,16 +96,14 @@ func postHeartbeat(c *gin.Context) {
 		return
 	}
 
-	heartbeat := Heartbeat{SentAt: *req.SentAt}
-
-	heartbeats := append(device.heartbeats, heartbeat)
-	device.heartbeats = heartbeats
+	heartbeat := model.Heartbeat{SentAt: *req.SentAt}
+	device.AddHeartbeat(heartbeat)
 	c.Status(http.StatusNoContent)
 }
 
 func postStats(c *gin.Context) {
 	deviceID := c.Param("device_id")
-	device := retrieveDevice(deviceID)
+	device := model.GetDevice(deviceID)
 	if device == nil {
 		c.JSON(http.StatusNotFound, gin.H{"msg": "Device not found"})
 		return
@@ -187,32 +136,33 @@ func postStats(c *gin.Context) {
 		return
 	}
 
-	s := Stats{SentAt: *req.SentAt, UploadTime: *req.UploadTime}
-
-	device.stats = append(device.stats, s)
+	s := model.Stats{SentAt: *req.SentAt, UploadTime: *req.UploadTime}
+	device.AddStats(s)
 	c.Status(http.StatusNoContent)
 }
 
 func getStats(c *gin.Context) {
 	deviceID := c.Param("device_id")
-	device := retrieveDevice(deviceID)
+	device := model.GetDevice(deviceID)
 	if device == nil {
 		c.JSON(http.StatusNotFound, gin.H{"msg": "Device not found"})
 		return
 	}
+	heartbeats := device.Heartbeats()
+	stats := device.Stats()
 
-	if len(device.heartbeats) == 0 && len(device.stats) == 0 {
+	if len(heartbeats) == 0 && len(stats) == 0 {
 		c.Status(http.StatusNoContent)
 		return
 	}
 
 	var uptime float64
 	// Calculate uptime from heartbeats
-	if len(device.heartbeats) != 0 {
-		first := device.heartbeats[0].SentAt
-		last := device.heartbeats[len(device.heartbeats)-1].SentAt
+	if len(heartbeats) != 0 {
+		first := heartbeats[0].SentAt
+		last := heartbeats[len(heartbeats)-1].SentAt
 		elapsed := last.Sub(first).Minutes()
-		heartbeatCount := len(device.heartbeats)
+		heartbeatCount := len(heartbeats)
 		if elapsed > 0 {
 			uptime = float64(heartbeatCount) / elapsed * 100
 		} else {
@@ -224,12 +174,12 @@ func getStats(c *gin.Context) {
 
 	// Calculate average upload time
 	var avgUploadTime float64
-	if len(device.stats) != 0 {
+	if len(stats) != 0 {
 		var totalUploadTime int
-		for _, stat := range device.stats {
+		for _, stat := range stats {
 			totalUploadTime += stat.UploadTime
 		}
-		avgUploadTime = float64(totalUploadTime) / float64(len(device.stats))
+		avgUploadTime = float64(totalUploadTime) / float64(len(stats))
 	} else {
 		avgUploadTime = 0.0
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/icleary5/SafelyYouChallenge/model"
 )
 
 func TestMain(m *testing.M) {
@@ -17,8 +18,10 @@ func TestMain(m *testing.M) {
 }
 
 func resetDevices() {
-	devices = nil
-	initializeDevices("devices.csv")
+	model.ResetDevices()
+	if err := model.InitializeDevices("devices.csv"); err != nil {
+		panic(err)
+	}
 }
 
 func TestPostDeviceHeartbeat(t *testing.T) {
