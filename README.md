@@ -88,6 +88,17 @@ Finally, the flexibility of a NoSQL database makes it easier to accommodate futu
 
 ---
 
+## Extensibility
+
+The approach to extending the data model for additional metric types centers on flexibility at both the data storage and API layers. Rather than relying on a rigid schema, I would propose a key-value persistence model - such as Amazon DynamoDB - which naturally accommodates new metric types without requiring structural migrations. New metrics can be introduced simply by adding items with distinct sort key prefixes, effectively evolving the data model without altering an explicit schema. 
+
+On the computation side, the system already tracks the average upload time using the incremental mean, an online algorithm. This pattern can be extended to other statistics by applying similar streaming or incremental techniques. These metrics are updated at write time - during request handling - making the system efficient and avoiding the need for expensive recomputation. All computed values would be stored directly in the key-value store, keeping the implementation straightforward and consistent. 
+
+The API design allows for extra metrics to be sent in `POST /api/v1/devices/{device_id}/stats`. Therefore new metrics data can be added to the API specification in a backwards-compatible way. In effect, both the storage model and API contract can be designed to evolve organically as new metric types are introduced. 
+
+
+---
+
 ## Security Posture (Planned)
 
 The current implementation of the API is relatively low-value from an attacker’s perspective, but this is expected to change as the system evolves and begins to host more meaningful and sensitive data. With that in mind, the security posture is designed not just for the present state of the system, but for its anticipated future role as a more critical service. 
@@ -108,7 +119,7 @@ In summary, the intended security posture is built on three primary pillars: sec
 
 **Time Spent**: Approximately 11.5 hours for learning GoLang, studying the problem, and implementing a solution.
 
-**Most Difficult Part**: This project went pretty smoothly. I didn't find any part of it frustrating. Most of the time was spent learning GoLang.
+**Most Difficult Part**: This project went pretty smoothly. I didn't find any part of it frustrating. Most of the time was spent learning GoLang. Because I've been using Python for so long, it was challenging to keep concurrency in mind.
 
 **Extending for Additional Metrics**: Additional work is planned to ensure extensibility.
 
