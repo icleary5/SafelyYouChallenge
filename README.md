@@ -126,6 +126,26 @@ In summary, the intended security posture is built on three primary pillars: sec
 
 ---
 
+Here is a tightened, recruiter-appropriate version in your voice:
+
+---
+
+## Use of A.I. Tools
+
+Throughout this project, I used A.I. tools in a supporting role to accelerate learning, improve productivity, and validate my work, while maintaining full ownership of the solution.
+
+First, I used A.I. primarily as a learning and research aid. When I encountered unfamiliar concepts - such as numerical stability or common Go server patterns—I used ChatGPT as an advanced search tool to help me understand the space and identify useful search terms. I then followed up by consulting primary sources to verify and deepen my understanding.
+
+Second, I used tools like GitHub Copilot and ChatGPT for targeted coding assistance. This included generating small code snippets, exploring implementation approaches, and answering specific questions (e.g., testing strategies). In some cases, A.I. generated larger blocks of code, but I treated these as drafts: I reviewed all generated code carefully, ensured I understood it, and rewrote or replaced portions that were incorrect or not aligned with my standards.
+
+Third, I used A.I. to streamline documentation and planning. I converted voice memos into structured text, generated summaries and to-do lists, and drafted sections of the README (including the security posture). This allowed me to maintain momentum while keeping documentation clear and professional.
+
+Finally, I used A.I. as a validation tool. I leveraged it to review API contract compliance and identify gaps in my implementation. I iterated on these findings, reviewing each suggested fix and ensuring correctness before incorporating changes.
+
+Overall, I used A.I. as a productivity and learning multiplier—not as a substitute for understanding or decision-making. I maintained full responsibility for the design, correctness, and quality of the final solution.
+
+---
+
 ## Summary
 
 **Time Spent**: Approximately 11.5 hours for learning GoLang, studying the problem, and implementing a solution.
