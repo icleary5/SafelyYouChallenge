@@ -148,8 +148,7 @@ func getStats(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"msg": "Device not found"})
 		return
 	}
-	heartbeats := device.Heartbeats()
-	stats := device.Stats()
+	heartbeats, stats := device.HeartbeatsAndStats()
 
 	if len(heartbeats) == 0 && len(stats) == 0 {
 		c.Status(http.StatusNoContent)

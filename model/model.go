@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/csv"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -17,11 +18,15 @@ type Stats struct {
 
 type Device struct {
 	ID         string
+	mu         sync.RWMutex
 	heartbeats []Heartbeat
 	stats      []Stats
 }
 
-var devices []Device
+var (
+	devicesMu sync.RWMutex
+	devices   []Device
+)
 
 func InitializeDevices(filePath string) error {
 	f, err := os.Open(filePath)
@@ -36,6 +41,9 @@ func InitializeDevices(filePath string) error {
 		return err
 	}
 
+	devicesMu.Lock()
+	defer devicesMu.Unlock()
+
 	for _, record := range records {
 		if len(record) < 1 {
 			continue
@@ -47,10 +55,14 @@ func InitializeDevices(filePath string) error {
 }
 
 func ResetDevices() {
+	devicesMu.Lock()
+	defer devicesMu.Unlock()
 	devices = nil
 }
 
 func GetDevice(deviceID string) *Device {
+	devicesMu.RLock()
+	defer devicesMu.RUnlock()
 	for i := range devices {
 		if devices[i].ID == deviceID {
 			return &devices[i]
@@ -60,17 +72,33 @@ func GetDevice(deviceID string) *Device {
 }
 
 func (d *Device) AddHeartbeat(hb Heartbeat) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.heartbeats = append(d.heartbeats, hb)
 }
 
 func (d *Device) AddStats(s Stats) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.stats = append(d.stats, s)
 }
 
 func (d *Device) Heartbeats() []Heartbeat {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return append([]Heartbeat(nil), d.heartbeats...)
 }
 
 func (d *Device) Stats() []Stats {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return append([]Stats(nil), d.stats...)
+}
+
+// HeartbeatsAndStats returns a consistent snapshot of both slices under a single lock,
+// preventing a torn read between the two calls in getStats.
+func (d *Device) HeartbeatsAndStats() ([]Heartbeat, []Stats) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return append([]Heartbeat(nil), d.heartbeats...), append([]Stats(nil), d.stats...)
 }
