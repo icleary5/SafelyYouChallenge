@@ -46,6 +46,8 @@ func main() {
 	r := setupRouter()
 
 	// Start the server on port 6733
+	// Note: In a production environment, you would typically want to make the host and port configurable via environment variables and/or command-line flags.
+	// But because the API specification explicitly states that the server should listen on 127.0.0.1:6733, we will hardcode it here for simplicity.
 	if err := r.Run("127.0.0.1:6733"); err != nil {
 		log.Fatal("Error starting server: ", err)
 	}
