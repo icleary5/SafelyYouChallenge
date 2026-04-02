@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestAddHeartbeatUpdatesSummaryAndPreservesSlice(t *testing.T) {
+func TestAddHeartbeatUpdatesSummary(t *testing.T) {
 	device := &Device{ID: "test-device"}
 
 	first := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
@@ -25,13 +25,5 @@ func TestAddHeartbeatUpdatesSummaryAndPreservesSlice(t *testing.T) {
 	}
 	if !lastAt.Equal(third) {
 		t.Fatalf("expected last heartbeat %s, got %s", third, lastAt)
-	}
-
-	heartbeats := device.Heartbeats()
-	if len(heartbeats) != 3 {
-		t.Fatalf("expected 3 heartbeats in slice, got %d", len(heartbeats))
-	}
-	if !heartbeats[0].SentAt.Equal(first) || !heartbeats[1].SentAt.Equal(second) || !heartbeats[2].SentAt.Equal(third) {
-		t.Fatalf("expected heartbeats to be preserved in insertion order")
 	}
 }

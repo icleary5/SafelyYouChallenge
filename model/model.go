@@ -2,6 +2,9 @@ package model
 
 import (
 	"encoding/csv"
+	"encoding/json"
+	"io"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -17,21 +20,32 @@ type Stats struct {
 }
 
 type Device struct {
-	ID         string
-	mu         sync.RWMutex
-	heartbeats []Heartbeat
-	stats      []Stats
+	ID               string
+	mu               sync.RWMutex
 	firstHeartbeatAt time.Time
 	lastHeartbeatAt  time.Time
 	heartbeatCount   int64
-	uploadTimeMean  float64
-	uploadTimeCount int64
+	uploadTimeMean   float64
+	uploadTimeCount  int64
 }
 
 var (
 	devicesMu sync.RWMutex
 	devices   []Device
+
+	externalStoreLogger = log.New(io.Discard, "", 0)
 )
+
+type heartbeatStoreRecord struct {
+	DeviceID string    `json:"device_id"`
+	SentAt   time.Time `json:"sent_at"`
+}
+
+type statsStoreRecord struct {
+	DeviceID   string    `json:"device_id"`
+	SentAt     time.Time `json:"sent_at"`
+	UploadTime int       `json:"upload_time"`
+}
 
 func InitializeDevices(filePath string) error {
 	f, err := os.Open(filePath)
@@ -76,10 +90,33 @@ func GetDevice(deviceID string) *Device {
 	return nil
 }
 
+// streamHeartbeatToExternalStore simulates writing heartbeat input to an external component.
+func streamHeartbeatToExternalStore(deviceID string, hb Heartbeat) {
+	record := heartbeatStoreRecord{DeviceID: deviceID, SentAt: hb.SentAt}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		externalStoreLogger.Printf("failed to encode heartbeat for device %s: %v", deviceID, err)
+		return
+	}
+	externalStoreLogger.Print(string(encoded))
+}
+
+// streamStatsToExternalStore simulates writing stats input to an external component.
+func streamStatsToExternalStore(deviceID string, s Stats) {
+	record := statsStoreRecord{DeviceID: deviceID, SentAt: s.SentAt, UploadTime: s.UploadTime}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		externalStoreLogger.Printf("failed to encode stats for device %s: %v", deviceID, err)
+		return
+	}
+	externalStoreLogger.Print(string(encoded))
+}
+
 func (d *Device) AddHeartbeat(hb Heartbeat) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.heartbeats = append(d.heartbeats, hb)
+
+	streamHeartbeatToExternalStore(d.ID, hb)
 
 	d.heartbeatCount++
 	if d.heartbeatCount == 1 {
@@ -91,23 +128,12 @@ func (d *Device) AddHeartbeat(hb Heartbeat) {
 func (d *Device) AddStats(s Stats) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.stats = append(d.stats, s)
+
+	streamStatsToExternalStore(d.ID, s)
 
 	d.uploadTimeCount++
 	incoming := float64(s.UploadTime)
 	d.uploadTimeMean = d.uploadTimeMean + (incoming-d.uploadTimeMean)/float64(d.uploadTimeCount)
-}
-
-func (d *Device) Heartbeats() []Heartbeat {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return append([]Heartbeat(nil), d.heartbeats...)
-}
-
-func (d *Device) Stats() []Stats {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return append([]Stats(nil), d.stats...)
 }
 
 func (d *Device) UploadTimeMean() float64 {
@@ -126,12 +152,4 @@ func (d *Device) HeartbeatSummary() (time.Time, time.Time, int64) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.firstHeartbeatAt, d.lastHeartbeatAt, d.heartbeatCount
-}
-
-// HeartbeatsAndStats returns a consistent snapshot of both slices under a single lock,
-// preventing a torn read between the two calls in getStats.
-func (d *Device) HeartbeatsAndStats() ([]Heartbeat, []Stats) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return append([]Heartbeat(nil), d.heartbeats...), append([]Stats(nil), d.stats...)
 }
