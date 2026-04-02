@@ -53,6 +53,34 @@ func TestPostDeviceStats(t *testing.T) {
 	}
 }
 
+func TestPostHeartbeatNoBodyReturnsNoContent(t *testing.T) {
+	resetDevices()
+	router := setupRouter()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", w.Code)
+	}
+}
+
+func TestPostStatsNoBodyReturnsNoContent(t *testing.T) {
+	resetDevices()
+	router := setupRouter()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", w.Code)
+	}
+}
+
 func TestGetDeviceStats(t *testing.T) {
 	resetDevices()
 	router := setupRouter()

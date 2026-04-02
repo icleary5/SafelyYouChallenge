@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -99,8 +101,19 @@ func postHeartbeat(c *gin.Context) {
 		return
 	}
 
+	raw, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
+		return
+	}
+
+	if len(bytes.TrimSpace(raw)) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+
 	var req HeartbeatRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.Unmarshal(raw, &req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
 		return
 	}
@@ -125,8 +138,19 @@ func postStats(c *gin.Context) {
 		return
 	}
 
+	raw, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
+		return
+	}
+
+	if len(bytes.TrimSpace(raw)) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+
 	var req StatsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.Unmarshal(raw, &req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": "Server Error"})
 		return
 	}
