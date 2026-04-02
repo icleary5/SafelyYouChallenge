@@ -10,8 +10,38 @@ A Go API implementation for monitoring device fleet health, tracking device upti
 
 ### Build and Run
 
+#### Linux
+
 ```bash
-# Run the application
+go build -o fleet-monitor .
+./fleet-monitor
+```
+
+#### macOS
+
+```bash
+go build -o fleet-monitor .
+./fleet-monitor
+```
+
+#### Windows (PowerShell)
+
+```powershell
+go build -o fleet-monitor.exe .
+.\fleet-monitor.exe
+```
+
+#### Windows (Command Prompt)
+
+```bat
+go build -o fleet-monitor.exe .
+fleet-monitor.exe
+```
+
+#### Development Shortcut and Tests
+
+```bash
+# Run without building a binary
 go run .
 
 # Run tests
