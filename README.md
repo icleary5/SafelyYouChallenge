@@ -70,7 +70,7 @@ Uptime is calculated as: `(heartbeat count / elapsed minutes) × 100%`
 A device is considered offline if no heartbeat is received during a minute interval.
 
 ### Average Upload Time
-Average upload time is the mean of all recorded upload duration values (in milliseconds).
+Average upload time is the mean of all recorded upload duration values (in nanoseconds).
 
 ---
 
