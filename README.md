@@ -88,118 +88,19 @@ Finally, the flexibility of a NoSQL database makes it easier to accommodate futu
 
 ---
 
-## Security Posture
+## Security Posture (Planned)
 
-This section outlines a forward-looking security strategy for the API, designed to scale with the system as it begins handling more sensitive and valuable data. While the current implementation may not be a high-value target, the architecture anticipates future risk and proactively establishes strong security foundations.
+The current implementation of the API is relatively low-value from an attacker’s perspective, but this is expected to change as the system evolves and begins to host more meaningful and sensitive data. With that in mind, the security posture is designed not just for the present state of the system, but for its anticipated future role as a more critical service. 
 
-### 1. Transport Security (TLS)
+At the foundation of the security model is the use of TLS to secure all communication between client devices and the server. Because both the client and server are under our control, we can go beyond standard transport security and introduce a symmetric cryptographic scheme for authenticating requests. Each device will be provisioned with a unique symmetric key, and the server will maintain a secure mapping of device identifiers to their corresponding keys, stored in a system such as AWS Key Management Service (KMS). Every request sent by a device will be cryptographically signed using its key, and the server will verify this signature before processing the request. Likewise, server responses will also be signed using the same symmetric key, allowing the device to verify the authenticity of the server. 
 
-All communication between client devices and the API must be secured using TLS. This ensures:
+Care is taken to avoid leaking sensitive information through side channels. Although TLS protects request contents, including device identifiers in the path, response behavior must also be hardened. Unauthorized access attempts should not reveal whether a given device ID exists. Instead, responses should be indistinguishable from those returned for non-existent resources (e.g., consistent with a 404-style response), preventing attackers from inferring valid device identifiers through response patterns. 
 
-* Confidentiality of transmitted data
-* Protection against man-in-the-middle (MITM) attacks
-* Integrity of request and response payloads
+Key management and rotation are central to maintaining long-term security. Symmetric keys assigned to devices will be rotated automatically using AWS KMS. This process can be orchestrated via a Lambda function that responds to key rotation events and performs a secure key exchange with the device. To support this, the server infrastructure will maintain an asymmetric key pair used for the exchange of symmetric keys. The private key will be stored securely in KMS and shared across the cluster of API servers.
 
-### 2. Device Authentication via Symmetric Cryptography
+For performance and cost reasons, servers will cache key material in memory to avoid excessive calls to KMS. This is considered an acceptable trade-off, as compromise of in-memory keys would imply a broader system breach, at which point exposure of key material is no longer the primary concern. 
 
-Because both the client devices and server are controlled within the same system, a symmetric key model is used:
-
-* Each device is provisioned with a unique symmetric key (e.g., AES key).
-* The server stores all device keys securely (e.g., in AWS KMS).
-* Every request from a device is **cryptographically signed** using its key.
-* The server verifies the signature before processing the request.
-
-This ensures:
-
-* Strong authentication of device identity
-* Protection against spoofed or tampered requests
-
-### 3. Server Authentication (Mutual Trust)
-
-To ensure trust in both directions:
-
-* The server signs responses using the same symmetric key associated with the device.
-* Devices verify the server’s signature before accepting responses.
-
-This prevents:
-
-* Malicious or spoofed server responses
-* Unauthorized intermediaries injecting data
-
-### 4. Information Leakage Mitigation
-
-Device identifiers are included in request paths and may be sensitive. Although TLS encrypts transport, additional precautions are taken:
-
-* Unauthorized requests must return responses indistinguishable from valid “not found” responses (e.g., HTTP 404).
-* Avoid revealing whether a device ID exists via status codes or error messages.
-
-This prevents:
-
-* Enumeration attacks
-* Side-channel leakage of valid device IDs
-
-### 5. Secure Key Storage (AWS KMS)
-
-All cryptographic keys are stored in a secure key management system such as AWS KMS:
-
-* Centralized key storage
-* Strict access controls
-* Auditability and rotation support
-
-### 6. Automated Key Rotation
-
-To reduce long-term key exposure:
-
-* KMS-managed key rotation is enabled.
-* A Lambda function responds to rotation events and initiates key updates on devices.
-* A **Diffie-Hellman key exchange** is used to securely negotiate new symmetric keys with devices.
-
-Important considerations:
-
-* Use a well-established, vetted cryptographic library for Diffie-Hellman.
-* Avoid implementing custom cryptographic algorithms.
-
-### 7. Asymmetric Key Infrastructure for Key Exchange
-
-* The server fleet shares an asymmetric private key used during Diffie-Hellman exchanges.
-* This private key is securely stored in KMS.
-* All servers use this shared key to participate in secure key negotiation with devices.
-
-### 8. Performance Considerations (Key Caching)
-
-To control operational costs and latency:
-
-* Servers cache decrypted key material in memory.
-* This avoids excessive calls to KMS.
-
-Security implications:
-
-* In-memory caching is acceptable because compromise of server memory implies full system compromise.
-* At that point, access to keys is not the primary concern.
-
-### 9. Threat Model Summary
-
-This security posture protects against:
-
-* Unauthorized device impersonation
-* Request/response tampering
-* Device ID enumeration
-* Long-term key compromise
-
-It assumes:
-
-* Server compromise is catastrophic and out of scope for mitigation at this layer
-* Cryptographic primitives are implemented using trusted libraries
-
-### 10. High-Level Summary
-
-The system security model is built on three core principles:
-
-1. **Secure transport via TLS**
-2. **Mutual authentication using symmetric cryptographic signatures**
-3. **Automated, secure key rotation using KMS and Diffie-Hellman key exchange**
-
-This approach provides a strong, scalable foundation for securing communication between distributed devices and the API as the system evolves. 
+In summary, the intended security posture is built on three primary pillars: securing transport with TLS, authenticating and verifying all messages using per-device symmetric keys, and maintaining strong key hygiene through automated rotation and secure key exchange mechanisms. This approach is designed to scale with the system as it grows in complexity and value, while adhering to established best practices in applied cryptography and cloud-based key management. 
 
 ---
 
