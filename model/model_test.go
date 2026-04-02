@@ -12,9 +12,9 @@ func TestAddHeartbeatUpdatesSummary(t *testing.T) {
 	second := first.Add(30 * time.Second)
 	third := first.Add(60 * time.Second)
 
-	device.AddHeartbeat(Heartbeat{SentAt: first})
-	device.AddHeartbeat(Heartbeat{SentAt: second})
-	device.AddHeartbeat(Heartbeat{SentAt: third})
+	device.AddHeartbeat(first)
+	device.AddHeartbeat(second)
+	device.AddHeartbeat(third)
 
 	firstAt, lastAt, count := device.HeartbeatSummary()
 	if count != 3 {

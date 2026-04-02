@@ -96,8 +96,7 @@ func postHeartbeat(c *gin.Context) {
 		return
 	}
 
-	heartbeat := model.Heartbeat{SentAt: *req.SentAt}
-	device.AddHeartbeat(heartbeat)
+	device.AddHeartbeat(*req.SentAt)
 	c.Status(http.StatusNoContent)
 }
 
@@ -136,8 +135,7 @@ func postStats(c *gin.Context) {
 		return
 	}
 
-	s := model.Stats{SentAt: *req.SentAt, UploadTime: *req.UploadTime}
-	device.AddStats(s)
+	device.AddStats(*req.SentAt, *req.UploadTime)
 	c.Status(http.StatusNoContent)
 }
 

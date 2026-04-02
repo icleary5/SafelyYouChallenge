@@ -10,15 +10,6 @@ import (
 	"time"
 )
 
-type Heartbeat struct {
-	SentAt time.Time `json:"sent_at"`
-}
-
-type Stats struct {
-	SentAt     time.Time `json:"sent_at"`
-	UploadTime int       `json:"upload_time"` // upload duration in nanoseconds
-}
-
 type Device struct {
 	ID               string
 	mu               sync.RWMutex
@@ -91,8 +82,8 @@ func GetDevice(deviceID string) *Device {
 }
 
 // streamHeartbeatToExternalStore simulates writing heartbeat input to an external component.
-func streamHeartbeatToExternalStore(deviceID string, hb Heartbeat) {
-	record := heartbeatStoreRecord{DeviceID: deviceID, SentAt: hb.SentAt}
+func streamHeartbeatToExternalStore(deviceID string, sentAt time.Time) {
+	record := heartbeatStoreRecord{DeviceID: deviceID, SentAt: sentAt}
 	encoded, err := json.Marshal(record)
 	if err != nil {
 		externalStoreLogger.Printf("failed to encode heartbeat for device %s: %v", deviceID, err)
@@ -102,8 +93,8 @@ func streamHeartbeatToExternalStore(deviceID string, hb Heartbeat) {
 }
 
 // streamStatsToExternalStore simulates writing stats input to an external component.
-func streamStatsToExternalStore(deviceID string, s Stats) {
-	record := statsStoreRecord{DeviceID: deviceID, SentAt: s.SentAt, UploadTime: s.UploadTime}
+func streamStatsToExternalStore(deviceID string, sentAt time.Time, uploadTime int) {
+	record := statsStoreRecord{DeviceID: deviceID, SentAt: sentAt, UploadTime: uploadTime}
 	encoded, err := json.Marshal(record)
 	if err != nil {
 		externalStoreLogger.Printf("failed to encode stats for device %s: %v", deviceID, err)
@@ -112,27 +103,27 @@ func streamStatsToExternalStore(deviceID string, s Stats) {
 	externalStoreLogger.Print(string(encoded))
 }
 
-func (d *Device) AddHeartbeat(hb Heartbeat) {
+func (d *Device) AddHeartbeat(sentAt time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	streamHeartbeatToExternalStore(d.ID, hb)
+	streamHeartbeatToExternalStore(d.ID, sentAt)
 
 	d.heartbeatCount++
 	if d.heartbeatCount == 1 {
-		d.firstHeartbeatAt = hb.SentAt
+		d.firstHeartbeatAt = sentAt
 	}
-	d.lastHeartbeatAt = hb.SentAt
+	d.lastHeartbeatAt = sentAt
 }
 
-func (d *Device) AddStats(s Stats) {
+func (d *Device) AddStats(sentAt time.Time, uploadTime int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	streamStatsToExternalStore(d.ID, s)
+	streamStatsToExternalStore(d.ID, sentAt, uploadTime)
 
 	d.uploadTimeCount++
-	incoming := float64(s.UploadTime)
+	incoming := float64(uploadTime)
 	d.uploadTimeMean = d.uploadTimeMean + (incoming-d.uploadTimeMean)/float64(d.uploadTimeCount)
 }
 
