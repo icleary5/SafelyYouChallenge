@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+// Device holds the identity and in-memory aggregate metrics for a single monitored device.
+// All fields are protected by mu; use the provided methods for concurrent access.
 type Device struct {
 	ID               string
 	mu               sync.RWMutex
@@ -38,6 +40,9 @@ type statsStoreRecord struct {
 	UploadTime int       `json:"upload_time"`
 }
 
+// InitializeDevices reads device IDs from a CSV file and populates the global device list.
+// Each row must have at least one column containing the device ID.
+// Call this once at startup before serving any requests.
 func InitializeDevices(filePath string) error {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -64,12 +69,14 @@ func InitializeDevices(filePath string) error {
 	return nil
 }
 
+// ResetDevices clears the global device list. Intended for use in tests.
 func ResetDevices() {
 	devicesMu.Lock()
 	defer devicesMu.Unlock()
 	devices = nil
 }
 
+// GetDevice returns a pointer to the Device with the given ID, or nil if not found.
 func GetDevice(deviceID string) *Device {
 	devicesMu.RLock()
 	defer devicesMu.RUnlock()
@@ -81,7 +88,7 @@ func GetDevice(deviceID string) *Device {
 	return nil
 }
 
-// streamHeartbeatToExternalStore simulates writing heartbeat input to an external component.
+// streamHeartbeatToExternalStore simulates writing a heartbeat record to an external component.
 func streamHeartbeatToExternalStore(deviceID string, sentAt time.Time) {
 	record := heartbeatStoreRecord{DeviceID: deviceID, SentAt: sentAt}
 	encoded, err := json.Marshal(record)
@@ -92,7 +99,7 @@ func streamHeartbeatToExternalStore(deviceID string, sentAt time.Time) {
 	externalStoreLogger.Print(string(encoded))
 }
 
-// streamStatsToExternalStore simulates writing stats input to an external component.
+// streamStatsToExternalStore simulates writing a stats record to an external component.
 func streamStatsToExternalStore(deviceID string, sentAt time.Time, uploadTime int) {
 	record := statsStoreRecord{DeviceID: deviceID, SentAt: sentAt, UploadTime: uploadTime}
 	encoded, err := json.Marshal(record)
@@ -103,6 +110,8 @@ func streamStatsToExternalStore(deviceID string, sentAt time.Time, uploadTime in
 	externalStoreLogger.Print(string(encoded))
 }
 
+// AddHeartbeat records a heartbeat timestamp, updating the first/last seen times and count.
+// The event is also forwarded to the external store.
 func (d *Device) AddHeartbeat(sentAt time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -116,6 +125,8 @@ func (d *Device) AddHeartbeat(sentAt time.Time) {
 	d.lastHeartbeatAt = sentAt
 }
 
+// AddStats records an upload-time sample (nanoseconds) and maintains an incremental mean.
+// The event is also forwarded to the external store.
 func (d *Device) AddStats(sentAt time.Time, uploadTime int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -127,18 +138,21 @@ func (d *Device) AddStats(sentAt time.Time, uploadTime int) {
 	d.uploadTimeMean = d.uploadTimeMean + (incoming-d.uploadTimeMean)/float64(d.uploadTimeCount)
 }
 
+// UploadTimeMean returns the current incremental mean of all recorded upload-time samples (nanoseconds).
 func (d *Device) UploadTimeMean() float64 {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.uploadTimeMean
 }
 
+// StatsCount returns the total number of upload-time samples recorded for this device.
 func (d *Device) StatsCount() int64 {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.uploadTimeCount
 }
 
+// HeartbeatSummary returns the first heartbeat time, last heartbeat time, and total heartbeat count.
 func (d *Device) HeartbeatSummary() (time.Time, time.Time, int64) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()

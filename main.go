@@ -12,10 +12,13 @@ import (
 	"github.com/icleary5/SafelyYouChallenge/model"
 )
 
+// HeartbeatRequest is the JSON body accepted by POST /api/v1/devices/:device_id/heartbeat.
 type HeartbeatRequest struct {
 	SentAt *time.Time `json:"sent_at"`
 }
 
+// StatsRequest is the JSON body accepted by POST /api/v1/devices/:device_id/stats.
+// UploadTime is the video-upload duration expressed in nanoseconds.
 type StatsRequest struct {
 	SentAt     *time.Time `json:"sent_at"`
 	UploadTime *int       `json:"upload_time"`
@@ -37,6 +40,7 @@ func main() {
 	}
 }
 
+// setupRouter creates and returns the Gin engine with all routes registered.
 func setupRouter() *gin.Engine {
 	r := gin.Default()
 	r.POST("api/v1/devices/:device_id/heartbeat", postHeartbeat)
@@ -45,6 +49,7 @@ func setupRouter() *gin.Engine {
 	return r
 }
 
+// isJSONContentType reports whether the request Content-Type header is application/json.
 func isJSONContentType(c *gin.Context) bool {
 	contentType := c.GetHeader("Content-Type")
 	if contentType == "" {
@@ -59,7 +64,10 @@ func isJSONContentType(c *gin.Context) bool {
 	return mediaType == "application/json"
 }
 
-// Handler for the /heartbeat endpoint
+// postHeartbeat handles POST /api/v1/devices/:device_id/heartbeat.
+// An empty body returns 204 with no state change.
+// A JSON body must include sent_at; missing or malformed fields return 500.
+// An unknown device_id returns 404.
 func postHeartbeat(c *gin.Context) {
 
 	deviceID := c.Param("device_id")
@@ -100,6 +108,10 @@ func postHeartbeat(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// postStats handles POST /api/v1/devices/:device_id/stats.
+// An empty body returns 204 with no state change.
+// A JSON body must include sent_at and upload_time (nanoseconds); missing or malformed fields return 500.
+// An unknown device_id returns 404.
 func postStats(c *gin.Context) {
 	deviceID := c.Param("device_id")
 	device := model.GetDevice(deviceID)
@@ -139,6 +151,11 @@ func postStats(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// getStats handles GET /api/v1/devices/:device_id/stats.
+// Returns 204 when the device has recorded no heartbeats and no stats.
+// Otherwise returns 200 with avg_upload_time (Go duration string) and uptime
+// (heartbeats-per-minute × 100, expressed as a percentage).
+// An unknown device_id returns 404.
 func getStats(c *gin.Context) {
 	deviceID := c.Param("device_id")
 	device := model.GetDevice(deviceID)
