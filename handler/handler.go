@@ -1,9 +1,6 @@
 package handler
 
 import (
-	"bytes"
-	"encoding/json"
-	"mime"
 	"net/http"
 	"time"
 
@@ -13,14 +10,14 @@ import (
 
 // heartbeatRequest is the JSON body accepted by POST /api/v1/devices/:device_id/heartbeat.
 type heartbeatRequest struct {
-	SentAt *time.Time `json:"sent_at"`
+	SentAt *time.Time `json:"sent_at" binding:"required"`
 }
 
 // statsRequest is the JSON body accepted by POST /api/v1/devices/:device_id/stats.
 // UploadTime is the video-upload duration expressed in nanoseconds.
 type statsRequest struct {
-	SentAt     *time.Time `json:"sent_at"`
-	UploadTime *int64     `json:"upload_time"`
+	SentAt     *time.Time `json:"sent_at" binding:"required"`
+	UploadTime *int64     `json:"upload_time" binding:"required"`
 }
 
 // Handler holds the dependencies shared across all HTTP handlers.
@@ -40,20 +37,6 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("api/v1/devices/:device_id/stats", h.getStats)
 }
 
-// isJSONContentType reports whether the request Content-Type header is
-// application/json, tolerating optional parameters (e.g. charset).
-func isJSONContentType(c *gin.Context) bool {
-	ct := c.GetHeader("Content-Type")
-	if ct == "" {
-		return false
-	}
-	mediaType, _, err := mime.ParseMediaType(ct)
-	if err != nil {
-		return false
-	}
-	return mediaType == "application/json"
-}
-
 // postHeartbeat handles POST /api/v1/devices/:device_id/heartbeat.
 //
 // Empty body → 204 No Content (no state change).
@@ -68,24 +51,19 @@ func (h *Handler) postHeartbeat(c *gin.Context) {
 		return
 	}
 
-	raw, err := c.GetRawData()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"msg": "server error"})
-		return
-	}
-	if len(bytes.TrimSpace(raw)) == 0 {
+	if c.Request.ContentLength == 0 {
 		c.Status(http.StatusNoContent)
 		return
 	}
 
-	if !isJSONContentType(c) {
+	if c.ContentType() != "application/json" {
 		// NOTE: 415 Unsupported Media Type would be semantically correct.
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": "server error"})
 		return
 	}
 
 	var req heartbeatRequest
-	if err := json.Unmarshal(raw, &req); err != nil || req.SentAt == nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		// NOTE: 400 Bad Request would be semantically correct.
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": "server error"})
 		return
@@ -110,24 +88,19 @@ func (h *Handler) postStats(c *gin.Context) {
 		return
 	}
 
-	raw, err := c.GetRawData()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"msg": "server error"})
-		return
-	}
-	if len(bytes.TrimSpace(raw)) == 0 {
+	if c.Request.ContentLength == 0 {
 		c.Status(http.StatusNoContent)
 		return
 	}
 
-	if !isJSONContentType(c) {
+	if c.ContentType() != "application/json" {
 		// NOTE: 415 Unsupported Media Type would be semantically correct.
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": "server error"})
 		return
 	}
 
 	var req statsRequest
-	if err := json.Unmarshal(raw, &req); err != nil || req.SentAt == nil || req.UploadTime == nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		// NOTE: 400 Bad Request would be semantically correct.
 		c.JSON(http.StatusInternalServerError, gin.H{"msg": "server error"})
 		return
