@@ -18,16 +18,14 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func resetDevices() {
-	model.ResetDevices()
-	if err := model.InitializeDevices("devices.csv"); err != nil {
-		panic(err)
-	}
+// newTestStore returns a store pre-loaded with the single device used across
+// all integration tests. No filesystem access is required.
+func newTestStore() model.Store {
+	return model.NewMemoryStore([]string{"60-6b-44-84-dc-64"})
 }
 
 func TestPostDeviceHeartbeat(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
+	router := setupRouter(newTestStore())
 
 	body := `{"sent_at":"2026-03-31T12:00:00Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(body))
@@ -42,8 +40,7 @@ func TestPostDeviceHeartbeat(t *testing.T) {
 }
 
 func TestPostDeviceStats(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
+	router := setupRouter(newTestStore())
 
 	body := `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", strings.NewReader(body))
@@ -58,8 +55,7 @@ func TestPostDeviceStats(t *testing.T) {
 }
 
 func TestPostHeartbeatNoBodyReturnsNoContent(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
+	router := setupRouter(newTestStore())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", nil)
 	w := httptest.NewRecorder()
@@ -72,8 +68,7 @@ func TestPostHeartbeatNoBodyReturnsNoContent(t *testing.T) {
 }
 
 func TestPostStatsNoBodyReturnsNoContent(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
+	router := setupRouter(newTestStore())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", nil)
 	w := httptest.NewRecorder()
@@ -86,8 +81,7 @@ func TestPostStatsNoBodyReturnsNoContent(t *testing.T) {
 }
 
 func TestGetDeviceStats(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
+	router := setupRouter(newTestStore())
 
 	heartbeats := []string{
 		`{"sent_at":"2026-03-31T12:00:00Z"}`,
@@ -95,16 +89,15 @@ func TestGetDeviceStats(t *testing.T) {
 		`{"sent_at":"2026-03-31T12:01:00Z"}`,
 	}
 	for _, heartbeatBody := range heartbeats {
-		postHeartbeatReq := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(heartbeatBody))
-		postHeartbeatReq.Header.Set("Content-Type", "application/json")
-		heartbeatW := httptest.NewRecorder()
-		router.ServeHTTP(heartbeatW, postHeartbeatReq)
-		if heartbeatW.Code != http.StatusNoContent {
-			t.Fatalf("expected heartbeat POST 204, got %d", heartbeatW.Code)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(heartbeatBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("expected heartbeat POST 204, got %d", w.Code)
 		}
 	}
 
-	// Seed one stats entry so the GET returns 200 rather than 204
 	statsBody := `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`
 	postReq := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", strings.NewReader(statsBody))
 	postReq.Header.Set("Content-Type", "application/json")
@@ -112,7 +105,6 @@ func TestGetDeviceStats(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/60-6b-44-84-dc-64/stats", nil)
 	w := httptest.NewRecorder()
-
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -127,20 +119,18 @@ func TestGetDeviceStats(t *testing.T) {
 		t.Fatalf("failed to decode response body: %v", err)
 	}
 	if resp.AvgUploadTime != "500ms" {
-		t.Errorf("expected avg_upload_time to be 500ms, got %q", resp.AvgUploadTime)
+		t.Errorf("expected avg_upload_time 500ms, got %q", resp.AvgUploadTime)
 	}
 	if math.Abs(resp.Uptime-300.0) > 1e-9 {
-		t.Errorf("expected uptime to be 300.0, got %f", resp.Uptime)
+		t.Errorf("expected uptime 300.0, got %f", resp.Uptime)
 	}
 }
 
 func TestGetDeviceStatsNoDataReturnsNoContent(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
+	router := setupRouter(newTestStore())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/60-6b-44-84-dc-64/stats", nil)
 	w := httptest.NewRecorder()
-
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
@@ -148,98 +138,130 @@ func TestGetDeviceStatsNoDataReturnsNoContent(t *testing.T) {
 	}
 }
 
-func TestPostHeartbeatMissingSentAtReturnsInternalServerError(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
-
-	body := `{}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
+// TestPostHeartbeatErrors exercises all invalid-input paths for the heartbeat
+// endpoint in a table-driven style.
+func TestPostHeartbeatErrors(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		contentType string
+		wantStatus  int
+	}{
+		{
+			name:        "missing sent_at",
+			body:        `{}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusInternalServerError,
+		},
+		{
+			name:        "malformed JSON",
+			body:        `{"sent_at":`,
+			contentType: "application/json",
+			wantStatus:  http.StatusInternalServerError,
+		},
+		{
+			name:        "wrong content type",
+			body:        `{"sent_at":"2026-03-31T12:00:00Z"}`,
+			contentType: "text/plain",
+			wantStatus:  http.StatusInternalServerError,
+		},
+		{
+			name:        "unknown device",
+			body:        `{"sent_at":"2026-03-31T12:00:00Z"}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusNotFound,
+		},
 	}
 
-	var resp map[string]string
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response body: %v", err)
-	}
-	if resp["msg"] == "" {
-		t.Error("expected msg to be present in response")
-	}
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := setupRouter(newTestStore())
 
-func TestPostHeartbeatUnsupportedMediaTypeReturnsInternalServerError(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
+			path := "/api/v1/devices/60-6b-44-84-dc-64/heartbeat"
+			if tc.wantStatus == http.StatusNotFound {
+				path = "/api/v1/devices/unknown/heartbeat"
+			}
 
-	body := `{"sent_at":"2026-03-31T12:00:00Z"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(body))
-	req.Header.Set("Content-Type", "text/plain")
-	w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", tc.contentType)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
 
-	router.ServeHTTP(w, req)
+			if w.Code != tc.wantStatus {
+				t.Errorf("expected %d, got %d", tc.wantStatus, w.Code)
+			}
 
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
-	}
-}
-
-func TestPostHeartbeatMalformedJSONReturnsInternalServerError(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
-
-	body := `{"sent_at":`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
-	}
-}
-
-func TestPostHeartbeatUnknownDeviceReturnsNotFoundWithMsg(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
-
-	body := `{"sent_at":"2026-03-31T12:00:00Z"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/unknown/heartbeat", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-
-	var resp map[string]string
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response body: %v", err)
-	}
-	if resp["msg"] == "" {
-		t.Error("expected msg to be present in response")
+			var resp map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode response body: %v", err)
+			}
+			if resp["msg"] == "" {
+				t.Error("expected msg field in response body")
+			}
+		})
 	}
 }
 
-func TestPostStatsUnsupportedMediaTypeReturnsInternalServerError(t *testing.T) {
-	resetDevices()
-	router := setupRouter()
+// TestPostStatsErrors exercises all invalid-input paths for the stats endpoint
+// in a table-driven style, symmetric with TestPostHeartbeatErrors.
+func TestPostStatsErrors(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		contentType string
+		wantStatus  int
+	}{
+		{
+			name:        "missing fields",
+			body:        `{}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusInternalServerError,
+		},
+		{
+			name:        "malformed JSON",
+			body:        `{"sent_at":`,
+			contentType: "application/json",
+			wantStatus:  http.StatusInternalServerError,
+		},
+		{
+			name:        "wrong content type",
+			body:        `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`,
+			contentType: "text/plain",
+			wantStatus:  http.StatusInternalServerError,
+		},
+		{
+			name:        "unknown device",
+			body:        `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`,
+			contentType: "application/json",
+			wantStatus:  http.StatusNotFound,
+		},
+	}
 
-	body := `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", strings.NewReader(body))
-	req.Header.Set("Content-Type", "text/plain")
-	w := httptest.NewRecorder()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := setupRouter(newTestStore())
 
-	router.ServeHTTP(w, req)
+			path := "/api/v1/devices/60-6b-44-84-dc-64/stats"
+			if tc.wantStatus == http.StatusNotFound {
+				path = "/api/v1/devices/unknown/stats"
+			}
 
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", tc.contentType)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != tc.wantStatus {
+				t.Errorf("expected %d, got %d", tc.wantStatus, w.Code)
+			}
+
+			var resp map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode response body: %v", err)
+			}
+			if resp["msg"] == "" {
+				t.Error("expected msg field in response body")
+			}
+		})
 	}
 }
