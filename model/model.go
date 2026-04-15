@@ -1,6 +1,7 @@
 package model
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -47,12 +48,13 @@ func (d *Device) AddStats(sentAt time.Time, uploadTime int64) {
 	d.uploadTimeMean += (float64(uploadTime) - d.uploadTimeMean) / float64(d.uploadTimeCount)
 }
 
-// UploadTimeMean returns the current incremental mean of all recorded
-// upload-time samples (nanoseconds).
-func (d *Device) UploadTimeMean() float64 {
+// UploadTimeMean returns the rounded mean of all recorded upload-time samples
+// (nanoseconds). Rounding is applied here so callers receive a clean int64
+// rather than silently truncating a float64 at the call site.
+func (d *Device) UploadTimeMean() int64 {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	return d.uploadTimeMean
+	return int64(math.Round(d.uploadTimeMean))
 }
 
 // StatsCount returns the total number of upload-time samples recorded for

@@ -20,8 +20,16 @@ func TestMain(m *testing.M) {
 
 // newTestStore returns a store pre-loaded with the single device used across
 // all integration tests. No filesystem access is required.
-func newTestStore() model.Store {
+func newTestStore() *model.MemoryStore {
 	return model.NewMemoryStore([]string{"60-6b-44-84-dc-64"})
+}
+
+// assertStatus fails the test if the recorded response code does not match want.
+func assertStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
+	t.Helper()
+	if w.Code != want {
+		t.Errorf("expected status %d, got %d", want, w.Code)
+	}
 }
 
 func TestPostDeviceHeartbeat(t *testing.T) {
@@ -34,9 +42,7 @@ func TestPostDeviceHeartbeat(t *testing.T) {
 
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
-	}
+	assertStatus(t, w, http.StatusNoContent)
 }
 
 func TestPostDeviceStats(t *testing.T) {
@@ -49,9 +55,7 @@ func TestPostDeviceStats(t *testing.T) {
 
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
-	}
+	assertStatus(t, w, http.StatusNoContent)
 }
 
 func TestPostHeartbeatNoBodyReturnsNoContent(t *testing.T) {
@@ -62,9 +66,7 @@ func TestPostHeartbeatNoBodyReturnsNoContent(t *testing.T) {
 
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
-	}
+	assertStatus(t, w, http.StatusNoContent)
 }
 
 func TestPostStatsNoBodyReturnsNoContent(t *testing.T) {
@@ -75,9 +77,7 @@ func TestPostStatsNoBodyReturnsNoContent(t *testing.T) {
 
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
-	}
+	assertStatus(t, w, http.StatusNoContent)
 }
 
 func TestGetDeviceStats(t *testing.T) {
@@ -107,9 +107,7 @@ func TestGetDeviceStats(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
+	assertStatus(t, w, http.StatusOK)
 
 	var resp struct {
 		AvgUploadTime string  `json:"avg_upload_time"`
@@ -133,9 +131,7 @@ func TestGetDeviceStatsNoDataReturnsNoContent(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
-	}
+	assertStatus(t, w, http.StatusNoContent)
 }
 
 // TestPostHeartbeatErrors exercises all invalid-input paths for the heartbeat
@@ -187,9 +183,7 @@ func TestPostHeartbeatErrors(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
-			if w.Code != tc.wantStatus {
-				t.Errorf("expected %d, got %d", tc.wantStatus, w.Code)
-			}
+			assertStatus(t, w, tc.wantStatus)
 
 			var resp map[string]string
 			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
@@ -251,9 +245,7 @@ func TestPostStatsErrors(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
-			if w.Code != tc.wantStatus {
-				t.Errorf("expected %d, got %d", tc.wantStatus, w.Code)
-			}
+			assertStatus(t, w, tc.wantStatus)
 
 			var resp map[string]string
 			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {

@@ -76,8 +76,8 @@ func TestAddStats_SingleSample(t *testing.T) {
 	if d.StatsCount() != 1 {
 		t.Errorf("expected StatsCount 1, got %d", d.StatsCount())
 	}
-	if d.UploadTimeMean() != 1000.0 {
-		t.Errorf("expected mean 1000.0, got %f", d.UploadTimeMean())
+	if d.UploadTimeMean() != 1000 {
+		t.Errorf("expected mean 1000, got %d", d.UploadTimeMean())
 	}
 }
 
@@ -87,12 +87,12 @@ func TestAddStats_IncrementalMean(t *testing.T) {
 	cases := []struct {
 		name    string
 		samples []int64
-		want    float64
+		want    int64
 	}{
-		{"two equal samples", []int64{200, 200}, 200.0},
-		{"two samples", []int64{100, 300}, 200.0},
-		{"three samples", []int64{100, 200, 300}, 200.0},
-		{"single nanosecond", []int64{1}, 1.0},
+		{"two equal samples", []int64{200, 200}, 200},
+		{"two samples", []int64{100, 300}, 200},
+		{"three samples", []int64{100, 200, 300}, 200},
+		{"single nanosecond", []int64{1}, 1},
 	}
 
 	for _, tc := range cases {
@@ -102,7 +102,7 @@ func TestAddStats_IncrementalMean(t *testing.T) {
 				d.AddStats(ts, s)
 			}
 			if got := d.UploadTimeMean(); got != tc.want {
-				t.Errorf("expected mean %f, got %f", tc.want, got)
+				t.Errorf("expected mean %d, got %d", tc.want, got)
 			}
 			if got := d.StatsCount(); got != int64(len(tc.samples)) {
 				t.Errorf("expected count %d, got %d", len(tc.samples), got)

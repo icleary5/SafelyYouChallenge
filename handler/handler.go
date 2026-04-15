@@ -30,11 +30,46 @@ func New(store model.Store) *Handler {
 	return &Handler{store: store}
 }
 
+// deviceKey is the Gin context key used to pass a looked-up Device from
+// requireDevice middleware to route handlers.
+const deviceKey = "device"
+
 // RegisterRoutes attaches all API routes to the supplied Gin engine.
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
-	r.POST("api/v1/devices/:device_id/heartbeat", h.postHeartbeat)
-	r.POST("api/v1/devices/:device_id/stats", h.postStats)
-	r.GET("api/v1/devices/:device_id/stats", h.getStats)
+	devices := r.Group("/api/v1/devices/:device_id", h.requireDevice)
+	devices.POST("/heartbeat", requireJSON, h.postHeartbeat)
+	devices.POST("/stats", requireJSON, h.postStats)
+	devices.GET("/stats", h.getStats)
+}
+
+// requireDevice is middleware that looks up the device by ID and stores it in
+// the Gin context under deviceKey. Aborts with 404 if the device is not found.
+func (h *Handler) requireDevice(c *gin.Context) {
+	device, ok := h.store.GetDevice(c.Param("device_id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"msg": "device not found"})
+		c.Abort()
+		return
+	}
+	c.Set(deviceKey, device)
+	c.Next()
+}
+
+// requireJSON is middleware that rejects requests with a non-JSON Content-Type
+// when a body is present. Empty-body requests pass through so that handlers
+// can return 204 No Content.
+// NOTE: 415 Unsupported Media Type would be semantically correct.
+func requireJSON(c *gin.Context) {
+	if c.Request.Body == nil || c.Request.ContentLength == 0 {
+		c.Next()
+		return
+	}
+	if c.ContentType() != "application/json" {
+		c.JSON(http.StatusInternalServerError, gin.H{"msg": "server error"})
+		c.Abort()
+		return
+	}
+	c.Next()
 }
 
 // postHeartbeat handles POST /api/v1/devices/:device_id/heartbeat.
@@ -42,23 +77,10 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 // Empty body → 204 No Content (no state change).
 // JSON body must include sent_at; missing or malformed fields → 500.
 // NOTE: The spec requires 500 for client input errors; semantically 400 Bad
-// Request and 415 Unsupported Media Type would be correct.
-// Unknown device_id → 404.
+// Request would be correct.
 func (h *Handler) postHeartbeat(c *gin.Context) {
-	device, ok := h.store.GetDevice(c.Param("device_id"))
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"msg": "device not found"})
-		return
-	}
-
-	if c.Request.ContentLength == 0 {
+	if c.Request.Body == nil || c.Request.ContentLength == 0 {
 		c.Status(http.StatusNoContent)
-		return
-	}
-
-	if c.ContentType() != "application/json" {
-		// NOTE: 415 Unsupported Media Type would be semantically correct.
-		c.JSON(http.StatusInternalServerError, gin.H{"msg": "server error"})
 		return
 	}
 
@@ -69,7 +91,7 @@ func (h *Handler) postHeartbeat(c *gin.Context) {
 		return
 	}
 
-	device.AddHeartbeat(*req.SentAt)
+	c.MustGet(deviceKey).(*model.Device).AddHeartbeat(*req.SentAt)
 	c.Status(http.StatusNoContent)
 }
 
@@ -79,23 +101,10 @@ func (h *Handler) postHeartbeat(c *gin.Context) {
 // JSON body must include sent_at and upload_time (nanoseconds); missing or
 // malformed fields → 500.
 // NOTE: The spec requires 500 for client input errors; semantically 400 Bad
-// Request and 415 Unsupported Media Type would be correct.
-// Unknown device_id → 404.
+// Request would be correct.
 func (h *Handler) postStats(c *gin.Context) {
-	device, ok := h.store.GetDevice(c.Param("device_id"))
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"msg": "device not found"})
-		return
-	}
-
-	if c.Request.ContentLength == 0 {
+	if c.Request.Body == nil || c.Request.ContentLength == 0 {
 		c.Status(http.StatusNoContent)
-		return
-	}
-
-	if c.ContentType() != "application/json" {
-		// NOTE: 415 Unsupported Media Type would be semantically correct.
-		c.JSON(http.StatusInternalServerError, gin.H{"msg": "server error"})
 		return
 	}
 
@@ -106,7 +115,7 @@ func (h *Handler) postStats(c *gin.Context) {
 		return
 	}
 
-	device.AddStats(*req.SentAt, *req.UploadTime)
+	c.MustGet(deviceKey).(*model.Device).AddStats(*req.SentAt, *req.UploadTime)
 	c.Status(http.StatusNoContent)
 }
 
@@ -116,15 +125,8 @@ func (h *Handler) postStats(c *gin.Context) {
 // Returns 200 with:
 //   - avg_upload_time: mean upload duration formatted as a Go duration string
 //   - uptime: (heartbeat count / elapsed minutes) × 100 as a percentage
-//
-// Unknown device_id → 404.
 func (h *Handler) getStats(c *gin.Context) {
-	device, ok := h.store.GetDevice(c.Param("device_id"))
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"msg": "device not found"})
-		return
-	}
-
+	device := c.MustGet(deviceKey).(*model.Device)
 	firstAt, lastAt, heartbeatCount := device.HeartbeatSummary()
 	statsCount := device.StatsCount()
 
