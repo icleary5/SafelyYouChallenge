@@ -1,6 +1,7 @@
 package model
 
 import (
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -160,5 +161,75 @@ func TestNewMemoryStoreFromCSV_MissingFile(t *testing.T) {
 	_, err := NewMemoryStoreFromCSV("nonexistent.csv")
 	if err == nil {
 		t.Error("expected an error for missing file, got nil")
+	}
+}
+
+func TestNewMemoryStoreFromCSV_MalformedCSV(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "bad-*.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A field starting with a quote that is never closed is invalid per RFC 4180.
+	if _, err := f.WriteString(`"unclosed`); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	_, err = NewMemoryStoreFromCSV(f.Name())
+	if err == nil {
+		t.Error("expected an error for malformed CSV, got nil")
+	}
+}
+
+func TestNewMemoryStore_Empty(t *testing.T) {
+	store := NewMemoryStore([]string{})
+
+	d, ok := store.GetDevice("any")
+	if ok {
+		t.Error("expected ok=false for empty store")
+	}
+	if d != nil {
+		t.Error("expected nil Device for empty store")
+	}
+}
+
+func TestMemoryStore_GetDevice_Concurrent(t *testing.T) {
+	const n = 100
+	store := NewMemoryStore([]string{"device-a"})
+
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			d, ok := store.GetDevice("device-a")
+			if !ok || d == nil {
+				t.Errorf("expected ok=true and non-nil Device in concurrent read")
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestAddStats_Concurrent(t *testing.T) {
+	const n = 100
+	d := &Device{ID: "concurrent-device"}
+	ts := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			d.AddStats(ts, 1000)
+		}()
+	}
+	wg.Wait()
+
+	if got := d.StatsCount(); got != n {
+		t.Errorf("expected StatsCount %d, got %d", n, got)
+	}
+	if got := d.UploadTimeMean(); got != 1000 {
+		t.Errorf("expected mean 1000, got %d", got)
 	}
 }

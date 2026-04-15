@@ -189,8 +189,12 @@ func TestPostHeartbeatErrors(t *testing.T) {
 			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 				t.Fatalf("failed to decode response body: %v", err)
 			}
-			if resp["msg"] == "" {
-				t.Error("expected msg field in response body")
+			wantMsg := "server error"
+			if tc.wantStatus == http.StatusNotFound {
+				wantMsg = "device not found"
+			}
+			if resp["msg"] != wantMsg {
+				t.Errorf("expected msg %q, got %q", wantMsg, resp["msg"])
 			}
 		})
 	}
@@ -251,9 +255,114 @@ func TestPostStatsErrors(t *testing.T) {
 			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 				t.Fatalf("failed to decode response body: %v", err)
 			}
-			if resp["msg"] == "" {
-				t.Error("expected msg field in response body")
+			wantMsg := "server error"
+			if tc.wantStatus == http.StatusNotFound {
+				wantMsg = "device not found"
+			}
+			if resp["msg"] != wantMsg {
+				t.Errorf("expected msg %q, got %q", wantMsg, resp["msg"])
 			}
 		})
 	}
+}
+
+func TestGetStats_OnlyHeartbeats_NoStats(t *testing.T) {
+	router := setupRouter(newTestStore())
+
+	for _, ts := range []string{"2026-03-31T12:00:00Z", "2026-03-31T12:01:00Z"} {
+		body := `{"sent_at":"` + ts + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(httptest.NewRecorder(), req)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/60-6b-44-84-dc-64/stats", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assertStatus(t, w, http.StatusOK)
+
+	var resp struct {
+		AvgUploadTime string  `json:"avg_upload_time"`
+		Uptime        float64 `json:"uptime"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if resp.AvgUploadTime != "0s" {
+		t.Errorf("expected avg_upload_time 0s, got %q", resp.AvgUploadTime)
+	}
+	if resp.Uptime <= 0 {
+		t.Errorf("expected positive uptime for two heartbeats 1 minute apart, got %f", resp.Uptime)
+	}
+}
+
+func TestGetStats_OnlyStats_NoHeartbeats(t *testing.T) {
+	router := setupRouter(newTestStore())
+
+	body := `{"sent_at":"2026-03-31T12:00:00Z","upload_time":500000000}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(httptest.NewRecorder(), req)
+
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/devices/60-6b-44-84-dc-64/stats", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req2)
+
+	assertStatus(t, w, http.StatusOK)
+
+	var resp struct {
+		AvgUploadTime string  `json:"avg_upload_time"`
+		Uptime        float64 `json:"uptime"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if resp.AvgUploadTime != "500ms" {
+		t.Errorf("expected avg_upload_time 500ms, got %q", resp.AvgUploadTime)
+	}
+	if resp.Uptime != 0.0 {
+		t.Errorf("expected uptime 0.0 when no heartbeats recorded, got %f", resp.Uptime)
+	}
+}
+
+func TestGetStats_SameTimestampHeartbeats_ZeroUptime(t *testing.T) {
+	router := setupRouter(newTestStore())
+
+	// Three heartbeats at the same instant → elapsed = 0 → uptime stays 0.
+	for i := 0; i < 3; i++ {
+		body := `{"sent_at":"2026-03-31T12:00:00Z"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/heartbeat", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(httptest.NewRecorder(), req)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/60-6b-44-84-dc-64/stats", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assertStatus(t, w, http.StatusOK)
+
+	var resp struct {
+		Uptime float64 `json:"uptime"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if resp.Uptime != 0.0 {
+		t.Errorf("expected uptime 0.0 when all heartbeats share the same timestamp, got %f", resp.Uptime)
+	}
+}
+
+func TestPostStats_ZeroUploadTime(t *testing.T) {
+	router := setupRouter(newTestStore())
+
+	// upload_time: 0 has a non-nil pointer after binding, so required validation passes.
+	body := `{"sent_at":"2026-03-31T12:00:00Z","upload_time":0}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/60-6b-44-84-dc-64/stats", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assertStatus(t, w, http.StatusNoContent)
 }
