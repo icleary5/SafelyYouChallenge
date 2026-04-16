@@ -45,7 +45,7 @@ fleet-monitor.exe
 go run .
 
 # Run tests
-go test
+go test ./...
 ```
 
 The server starts on `localhost:6733` and loads devices from `devices.csv` on startup. The device simulator can then send heartbeat and stats data to the API.
@@ -58,7 +58,7 @@ Results from the device simulator are provided in `results.txt`. Results were ge
 
 ### Implementation
 - **Framework**: Gin web framework for HTTP handling
-- **Data Structure**: In-memory storage of devices with heartbeat and stats collections
+- **Data Structure**: In-memory storage of devices with aggregated metrics (incremental mean and summary counts — individual events are not retained)
 - **Endpoints**: 
   - `POST /api/v1/devices/{device_id}/heartbeat` - Record device heartbeat
   - `POST /api/v1/devices/{device_id}/stats` - Record device upload stats
@@ -76,7 +76,7 @@ Average upload time is the mean of all recorded upload duration values (in nanos
 
 ## Database Architecture
 
-The current implementation stores all device data in memory using a package-level slice, where each device contains its own collections of heartbeats and statistics. This works well for prototyping and local testing, but it does not provide persistence and cannot scale beyond a single process. To prepare for production use, the codebase already introduces a separate database layer as its own package. This separation of concerns allows the storage implementation to evolve independently from the API logic, making it possible to replace the in-memory approach without disrupting the rest of the system.
+The current implementation stores all device data in memory using a map-backed `MemoryStore` (O(1) device lookup), where each device holds only pre-computed aggregate metrics — no raw event history is retained. This works well for prototyping and local testing, but it does not provide persistence and cannot scale beyond a single process. To prepare for production use, the codebase already introduces a separate database layer as its own package. This separation of concerns allows the storage implementation to evolve independently from the API logic, making it possible to replace the in-memory approach without disrupting the rest of the system.
 
 For a production system, the primary decision is between a relational database and a NoSQL database. Given the nature of this application, a NoSQL solution - specifically a key-value store such as AWS DynamoDB - is the better fit. The reason is that the system has a very well-defined and consistent access pattern: all reads and writes are performed using a device ID. There are no complex joins or relationships between entities that would justify the overhead of a relational model. In practice, even a relational database would rely heavily on indexing by device ID to achieve acceptable performance, meaning most operations would effectively be index lookups anyway. A NoSQL database models this pattern directly, eliminating unnecessary abstraction layers and improving performance.
 
@@ -105,8 +105,6 @@ The implementation focuses on keeping both uptime and upload duration calculatio
 For uptime, the calculation is intentionally minimal: it stores only the **first and most recent heartbeat timestamps**, along with a **count of heartbeats received**. This avoids retaining the full history of events while still allowing accurate uptime metrics to be derived.
 
 For average upload duration, the system uses the **incremental mean algorithm** to maintain a running average. Instead of storing all observed durations, it keeps only the **current mean and the count of samples**, updating the average as new data arrives. This achieves the same goal - accurate averaging - without the overhead of accumulating historical data.
-
-To support auditability and potential error recovery, the system also includes a streaming mechanism. Incoming device data is **forwarded to an external service interface**, though in the current demonstration setup, that data is simply discarded. This design decouples ingestion from storage, ensuring the server remains **highly responsive and protected from overload**, while leaving room to integrate persistent logging or downstream processing in a production environment.
 
 ---
 
@@ -156,9 +154,8 @@ Overall, I used A.I. as a productivity and learning multiplier—not as a substi
 
 **Runtime Complexity**:
 - Device initialization: O(n) where n is the number of devices
-- Heartbeat/stats recording: O(1) append operation per request
-- Stats retrieval: O(m + s) where m is heartbeat count and s is stats count, to calculate averages
-- Device lookup: O(d) linear search where d is total devices (acceptable for reasonable fleet sizes)
+- Heartbeat/stats recording: O(1) update of pre-computed aggregates per request
+- Stats retrieval: O(1) — only pre-computed aggregates (incremental mean, timestamps, counts) are read
+- Device lookup: O(1) map lookup by device ID
 
-For production deployments with thousands of devices, this could be optimized with indexed lookups and a persistent database.
-Further work is planned to change to an online algorithm to improve stats retrieval complexity.
+For production deployments with a persistent database, the access pattern maps naturally to a key-value store with device ID as the partition key.
